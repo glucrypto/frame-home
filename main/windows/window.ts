@@ -15,12 +15,12 @@ export function createWindow(
 
   const browserWindow = new BrowserWindow({
     ...opts,
-    frame: false,
+    frame: name === 'home',
     acceptFirstMouse: true,
-    transparent: process.platform === 'darwin',
+    transparent: name !== 'home' && process.platform === 'darwin',
     show: false,
     backgroundColor: store('main.colorwayPrimary', store('main.colorway'), 'background'),
-    skipTaskbar: process.platform !== 'linux',
+    skipTaskbar: name !== 'home' && process.platform !== 'linux',
     webPreferences: {
       ...webPreferences,
       preload: path.resolve(process.env.BUNDLE_LOCATION, 'bridge.js'),

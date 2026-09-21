@@ -1,7 +1,12 @@
-import { app, ipcMain, protocol, clipboard, powerMonitor, BrowserWindow } from 'electron'
+import { app, ipcMain, protocol, clipboard, BrowserWindow } from 'electron'
 import path from 'path'
 import log from 'electron-log'
 import url from 'url'
+
+// Set an isolated profile before importing any state or signer modules when requested.
+if (process.env.FRAME_HOME_USER_DATA) {
+  app.setPath('userData', path.resolve(process.env.FRAME_HOME_USER_DATA))
+}
 
 // DO NOT MOVE - env var below is required for app init and must be set before all local imports
 process.env.BUNDLE_LOCATION = process.env.BUNDLE_LOCATION || path.resolve(__dirname, './../..', 'bundle')
@@ -77,20 +82,9 @@ process.on('unhandledRejection', (e) => {
   log.error('Unhandled Rejection!', e)
 })
 
+// Upstream releases would replace this fork. Updates must be built from this source.
 function startUpdater() {
-  powerMonitor.on('resume', () => {
-    log.debug('System resuming, starting updater')
-
-    updater.start()
-  })
-
-  powerMonitor.on('suspend', () => {
-    log.debug('System suspending, stopping updater')
-
-    updater.stop()
-  })
-
-  updater.start()
+  log.info('Frame Home: upstream automatic updates are disabled')
 }
 
 global.eval = () => {
@@ -306,7 +300,7 @@ ipcMain.on('*:addFrame', (e, id) => {
 app.on('ready', () => {
   menu()
   windows.init()
-  if (app.dock) app.dock.hide()
+  if (app.dock) app.dock.show()
   if (isDev) {
     const loadDev = async () => {
       const { installDevTools, startCpuMonitoring } = await import('./dev')
@@ -332,9 +326,9 @@ ipcMain.on('tray:action', (e, action, ...args) => {
 
 app.on('second-instance', (event, argv, workingDirectory) => {
   log.info(`second instance requested from directory: ${workingDirectory}`)
-  windows.showTray()
+  windows.showHome()
 })
-app.on('activate', () => windows.showTray())
+app.on('activate', () => windows.showHome())
 
 app.on('before-quit', () => {
   if (!updater.updateReady) {

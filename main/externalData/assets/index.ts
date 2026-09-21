@@ -67,7 +67,16 @@ export default function rates(pylon: Pylon, store: Store) {
 
   function updateSubscription(chains: number[], address?: Address) {
     const subscribedCurrencies = chains.map((chainId) => ({ type: AssetType.NativeCurrency, chainId }))
-    const knownTokens = storeApi.getKnownTokens(address).filter((token) => chains.includes(token.chainId))
+    const accounts = Object.keys(store('main.accounts') || {})
+    if (address && !accounts.includes(address)) accounts.push(address)
+    const allKnown = accounts.flatMap((account) => storeApi.getKnownTokens(account))
+    const knownTokens = [
+      ...new Map(
+        allKnown
+          .filter((token) => chains.includes(token.chainId))
+          .map((token) => [`${token.chainId}:${token.address.toLowerCase()}`, token])
+      ).values()
+    ]
     const customTokens = storeApi
       .getCustomTokens()
       .filter(

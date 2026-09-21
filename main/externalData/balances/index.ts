@@ -327,5 +327,24 @@ export default function (store: Store) {
     runWhenReady(() => workerController?.updateKnownTokenBalances(address, tokens))
   }
 
-  return { start, stop, resume, pause, setAddress, addNetworks, addTokens }
+  const refreshAccount = (address: Address, chains: number[]) => {
+    if (!workerController) return Promise.reject(new Error('Balances worker is not ready'))
+    const tokens = [...storeApi.getCustomTokens(), ...storeApi.getKnownTokens(address)].filter((token) =>
+      chains.includes(token.chainId)
+    )
+    const tracked = [...new Map(tokens.map((token) => [toTokenId(token), token])).values()]
+    return workerController.scanAccount(address, tracked, chains)
+  }
+
+  return {
+    start,
+    stop,
+    resume,
+    pause,
+    setAddress,
+    addNetworks,
+    addTokens,
+    refreshAccount,
+    isReady: () => !!workerController?.isRunning()
+  }
 }
