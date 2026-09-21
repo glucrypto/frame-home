@@ -79,8 +79,10 @@ async function tokenBalanceScan(address: Address, tokensToOmit: Token[] = [], ch
     )
 
     sendToMainProcess({ type: 'tokenBalances', address, balances: tokenBalances })
+    return true
   } catch (e) {
     log.error('error scanning for token balances', e)
+    return false
   }
 }
 
@@ -91,8 +93,10 @@ async function fetchTokenBalances(address: Address, tokens: Token[]) {
     const tokenBalances = await balances.getTokenBalances(address, filteredTokens)
 
     sendToMainProcess({ type: 'tokenBalances', address, balances: tokenBalances })
+    return tokenBalances.length === filteredTokens.length
   } catch (e) {
     log.error('error fetching token balances', e)
+    return false
   }
 }
 
@@ -102,8 +106,10 @@ async function chainBalanceScan(address: string, chains?: number[]) {
     const chainBalances = await balances.getCurrencyBalances(address, availableChains)
 
     sendToMainProcess({ type: 'chainBalances', balances: chainBalances, address })
+    return chainBalances.length === availableChains.length
   } catch (e) {
     log.error('error scanning chain balance', e)
+    return false
   }
 }
 
@@ -122,6 +128,15 @@ function resetHeartbeat() {
 }
 
 const messageHandler: { [command: string]: (...params: any) => void } = {
+  scanAccount: async (scanId: number, address: Address, tokens: Token[], chains: number[]) => {
+    const results = await Promise.all([
+      chainBalanceScan(address, chains),
+      fetchTokenBalances(address, tokens),
+      tokenBalanceScan(address, tokens, chains)
+    ])
+    await updateBlacklist(address, chains)
+    sendToMainProcess({ type: 'accountScanComplete', scanId, complete: results.every(Boolean) })
+  },
   updateChainBalance: chainBalanceScan,
   fetchTokenBalances: fetchTokenBalances,
   heartbeat: resetHeartbeat,

@@ -37,6 +37,11 @@ export default class BalancesWorkerController extends EventEmitter {
 
   private bootstrapTimeout?: NodeJS.Timeout
   private heartbeat?: NodeJS.Timeout
+  private nextScanId = 0
+  private scans = new Map<
+    number,
+    { resolve: (complete: boolean) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
+  >()
 
   constructor() {
     super()
@@ -65,6 +70,16 @@ export default class BalancesWorkerController extends EventEmitter {
         this.heartbeat = setInterval(() => this.sendHeartbeat(), 1000 * 20)
 
         this.emit('ready')
+      }
+
+      if (message.type === 'accountScanComplete') {
+        const { scanId, complete } = message as WorkerMessage & { scanId: number; complete: boolean }
+        const pending = this.scans.get(scanId)
+        if (pending) {
+          clearTimeout(pending.timer)
+          this.scans.delete(scanId)
+          pending.resolve(complete)
+        }
       }
 
       if (message.type === 'chainBalances') {
@@ -126,8 +141,26 @@ export default class BalancesWorkerController extends EventEmitter {
     this.sendCommandToWorker('tokenBalanceScan', [address, tokens, chains])
   }
 
+  scanAccount(address: Address, tokens: Token[], chains: number[]): Promise<boolean> {
+    if (!this.isRunning()) return Promise.reject(new Error('Balances worker is not ready'))
+    const scanId = ++this.nextScanId
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.scans.delete(scanId)
+        reject(new Error('Account balance scan timed out'))
+      }, 60_000)
+      this.scans.set(scanId, { resolve, reject, timer })
+      this.sendCommandToWorker('scanAccount', [scanId, address, tokens, chains])
+    })
+  }
+
   // private
   private stopWorker() {
+    for (const pending of this.scans.values()) {
+      clearTimeout(pending.timer)
+      pending.reject(new Error('Balances worker stopped'))
+    }
+    this.scans.clear()
     if (this.heartbeat) {
       clearInterval(this.heartbeat)
       this.heartbeat = undefined
